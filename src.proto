@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "hoge.proto";
+
 message Test {
   string hoge = 1;
 }
