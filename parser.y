@@ -1,10 +1,13 @@
 class ProtobufParser
-token KEY INTEGER EQUAL EOL STRING INT32
-start statements
+token KEY INTEGER STRING INT32 MSG_NAME
+start messages
 rule
-  statements: statement { result = val[0] }
-            | statement statements { result = val }
-  statement: type KEY EQUAL index EOL { result = { id: val[3], type: val[0], key: val[1] } }
+  messages: message { result = val[0] }
+          | message messages { result = val }
+  message: 'message' MSG_NAME '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
+  defines: define { result = val[0] }
+         | define defines { result = val }
+  define: type KEY '=' index ';' { result = { id: val[3], type: val[0], key: val[1] } }
   type: STRING
       | INT32
   index: INTEGER { result = val[0].to_i }
@@ -14,16 +17,20 @@ end
 
   def parse(str)
     @q = []
+    @q << ["message", "message"]
+    @q << [:MSG_NAME, "Sample"]
+    @q << ["{", "{"]
     @q << [:STRING, "string"]
     @q << [:KEY, "hoge"]
-    @q << [:EQUAL, "="]
+    @q << ["=", "="]
     @q << [:INTEGER, "1"]
-    @q << [:EOL, ";"]
+    @q << [";", ";"]
     @q << [:STRING, "string"]
     @q << [:KEY, "fuga"]
-    @q << [:EQUAL, "="]
+    @q << ["=", "="]
     @q << [:INTEGER, "2"]
-    @q << [:EOL, ";"]
+    @q << [";", ";"]
+    @q << ["}", "}"]
     @q << [false, "$"]
     # p @q
     do_parse
