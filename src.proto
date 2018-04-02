@@ -1,0 +1,3 @@
+message Test {
+  string hoge = 1;
+}
