@@ -1,11 +1,13 @@
 class ProtobufParser
 token KEY INTEGER EQUAL EOL STRING INT32
-start stmt
+start statements
 rule
-  stmt: type KEY EQUAL index EOL
+  statements: statement { result = val[0] }
+            | statement statements { result = val }
+  statement: type KEY EQUAL index EOL { result = { id: val[3], type: val[0], key: val[1] } }
   type: STRING
       | INT32
-  index:  INTEGER { result = val[0].to_i }
+  index: INTEGER { result = val[0].to_i }
 end
 
 ---- inner
@@ -17,8 +19,13 @@ end
     @q << [:EQUAL, "="]
     @q << [:INTEGER, "1"]
     @q << [:EOL, ";"]
+    @q << [:STRING, "string"]
+    @q << [:KEY, "fuga"]
+    @q << [:EQUAL, "="]
+    @q << [:INTEGER, "2"]
+    @q << [:EOL, ";"]
     @q << [false, "$"]
-    p @q
+    # p @q
     do_parse
   end
 
@@ -32,6 +39,7 @@ parser = ProtobufParser.new
 if ARGV.length == 1
   src = File.open(ARGV[0]).read
   puts src
-  parser.parse(src)
+  puts "---"
+  p parser.parse(src)
   puts "end"
 end
