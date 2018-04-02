@@ -4,4 +4,5 @@ import "hoge.proto";
 
 message Test {
   string hoge = 1;
+  repeated string fuga = 2;
 }

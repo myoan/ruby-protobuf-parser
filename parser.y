@@ -8,7 +8,8 @@ rule
   message: 'message' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
   defines: define
          | define defines { result = val }
-  define: type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] } }
+  define: type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] , repeated: false} }
+        | 'repeated' type WORD '=' index ';' { result = { id: val[4], type: val[1], key: val[2], repeated: true } }
   version: 'syntax' '=' DQWORD ';' { result = {}; result[:version] = val[2].gsub("\"", "") }
   imports: import
          | import imports { result = val }
@@ -30,6 +31,7 @@ require 'strscan'
       s.scan(/\s+/)                 ? (nil) :
       s.scan(/message/)             ? (@q << [s.matched, s.matched]) :
       s.scan(/import/)              ? (@q << [s.matched, s.matched]) :
+      s.scan(/repeated/)            ? (@q << [s.matched, s.matched]) :
       s.scan(/string/)              ? (@q << [s.matched, s.matched]) :
       s.scan(/syntax/)              ? (@q << [s.matched, s.matched]) :
       s.scan(/(0|[1-9]\d*)/)        ? (@q << [:INTEGER,  s.matched]) :
