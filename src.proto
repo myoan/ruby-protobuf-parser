@@ -1,8 +1,13 @@
 syntax = "proto3";
 
 import "hoge.proto";
+package Hoge.fuga;
 
 message Test {
   string hoge = 1;
   repeated string fuga = 2;
+  oneof test_oneof {
+    string name = 3;
+    int32 sub_message = 4;
+  }
 }
