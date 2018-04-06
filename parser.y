@@ -1,24 +1,25 @@
 class ProtobufParser
 token INTEGER WORD DQWORD
-start statement
+start top_stmt
 rule
-  statement: version imports package_syntax messages { result = val[0].merge(val[1]).merge(val[2]).merge(val[3]) }
-  messages: message
-          | message messages { result = val }
-  message: 'message' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
-  defines: define
-         | oneof
-         | define defines { result = val }
-  define: type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] , repeated: false} }
-        | 'repeated' type WORD '=' index ';' { result = { id: val[4], type: val[1], key: val[2], repeated: true } }
+  top_stmt: version statements
   version: 'syntax' '=' DQWORD ';' { result = {}; result[:version] = val[2].gsub("\"", "") }
+  statements: statement
+            | statements statement { result = val[0].merge(val[1]) }
+  statement: import         {} # { result = val[0].merge(val[1]) }
+           | package_syntax {} # { result = val[0].merge(val[1]) }
+           | message        {} # { result = val[0].merge(val[1]) }
+  import: 'import' DQWORD ';' { result = {import: []}; result[:import] << val[1].gsub("\"", "") }
   package_syntax: 'package' package ';' { result = {}; result[:package] = val[1] }
   package: WORD
-         | WORD '.' package { result = val.join }
+         | package '.' WORD { result = val.join }
+  message: 'message' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
+  defines: define
+         | defines define { result = val }
+  define: oneof
+        | type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] , repeated: false} }
+        | 'repeated' type WORD '=' index ';' { result = { id: val[4], type: val[1], key: val[2], repeated: true } }
   oneof:  'oneof' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
-  imports: import
-         | import imports { result = val }
-  import: 'import' DQWORD ';' { result = {import: []}; result[:import] << val[1].gsub("\"", "") }
   type: 'bool'
       | 'bytes'
       | 'enum'
@@ -35,6 +36,7 @@ rule
       | 'sint64'
       | 'uint32'
       | 'uint64'
+      | WORD
   index: INTEGER { result = val[0].to_i }
 end
 
@@ -45,6 +47,8 @@ require 'strscan'
 ---- inner
 
   def parse(str)
+    @yydebug = false
+    # @yydebug = true
     s = StringScanner.new(str)
     @q = []
     until                    s.eos?
