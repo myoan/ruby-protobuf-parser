@@ -2,24 +2,37 @@ class ProtobufParser
 token INTEGER WORD DQWORD
 start top_stmt
 rule
-  top_stmt: version statements
-  version: 'syntax' '=' DQWORD ';' { result = {}; result[:version] = val[2].gsub("\"", "") }
+  top_stmt: version statements { result = val }
+  version: 'syntax' '=' DQWORD ';' { result = { :version => val[2].gsub("\"", "") } }
   statements: statement
             | statements statement { result = val[0].merge(val[1]) }
-  statement: import         {} # { result = val[0].merge(val[1]) }
-           | package_syntax {} # { result = val[0].merge(val[1]) }
-           | message        {} # { result = val[0].merge(val[1]) }
+  statement: import         { result = val[0].merge(val[1] || {} ) }
+           | package_syntax { result = val[0].merge(val[1] || {} ) }
+           | message        { result = val[0].merge(val[1] || {} ) }
   import: 'import' DQWORD ';' { result = {import: []}; result[:import] << val[1].gsub("\"", "") }
   package_syntax: 'package' package ';' { result = {}; result[:package] = val[1] }
   package: WORD
          | package '.' WORD { result = val.join }
   message: 'message' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
   defines: define
-         | defines define { result = val }
+         | defines define { result = val.flatten }
   define: oneof
+        | enum
+        | message
         | type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] , repeated: false} }
         | 'repeated' type WORD '=' index ';' { result = { id: val[4], type: val[1], key: val[2], repeated: true } }
-  oneof:  'oneof' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
+  oneof:  'oneof' WORD '{' defines '}' { result = { val[1].downcase.to_sym => val[3] } }
+  enum: 'enum' WORD '{' enum_defines '}' { result = { val[1].downcase.to_sym => val[3].flatten } }
+  enum_defines: enum_defined
+              | enum_defines enum_defined { result = val }
+  enum_defined: WORD '=' index ';' { result = { id: val[2], key: val[0] } }
+              | 'reserved' list ';' { result = { reserved: val[1..-2].flatten } }
+  list: element
+      | list ',' element { result = ([val[0]] + [val[2]]).flatten }
+  element: INTEGER              { result = { from: val[0].to_i, to: val[0].to_i } }
+         | DQWORD               { result = { from: val[0], to: val[0] } }
+         | INTEGER 'to' INTEGER { result = { from: val[0].to_i, to: val[2].to_i } }
+         | INTEGER 'to' WORD    { result = { from: val[0].to_i, to: val[2] } }
   type: 'bool'
       | 'bytes'
       | 'enum'
@@ -43,6 +56,7 @@ end
 ---- header
 
 require 'strscan'
+require 'json'
 
 ---- inner
 
@@ -56,6 +70,7 @@ require 'strscan'
       s.scan(/message/)             ? (@q << [s.matched, s.matched]) :
       s.scan(/import/)              ? (@q << [s.matched, s.matched]) :
       s.scan(/repeated/)            ? (@q << [s.matched, s.matched]) :
+      s.scan(/reserved/)            ? (@q << [s.matched, s.matched]) :
       s.scan(/bool/)                ? (@q << [s.matched, s.matched]) :
       s.scan(/bytes/)               ? (@q << [s.matched, s.matched]) :
       s.scan(/enum/)                ? (@q << [s.matched, s.matched]) :
@@ -74,6 +89,7 @@ require 'strscan'
       s.scan(/uint32/)              ? (@q << [s.matched, s.matched]) :
       s.scan(/uint64/)              ? (@q << [s.matched, s.matched]) :
       s.scan(/syntax/)              ? (@q << [s.matched, s.matched]) :
+      s.scan(/to/)                  ? (@q << [s.matched, s.matched]) :
       s.scan(/(0|[1-9]\d*)/)        ? (@q << [:INTEGER,  s.matched]) :
       s.scan(/{}=;/)                ? (@q << [s.matched, s.matched]) :
       s.scan(/\w+/)                 ? (@q << [:WORD,     s.matched]) :
@@ -81,7 +97,6 @@ require 'strscan'
       s.scan(/./)                   ? (@q << [s.matched, s.matched]) :
                                       (raise "scanner error (#{s.matched})")
     end
-    p @q
     do_parse
   end
 
@@ -94,8 +109,5 @@ require 'strscan'
 parser = ProtobufParser.new
 if ARGV.length == 1
   src = File.open(ARGV[0]).read
-  puts src
-  puts "---"
-  p parser.parse(src)
-  puts "---"
+  puts parser.parse(src).to_json
 end

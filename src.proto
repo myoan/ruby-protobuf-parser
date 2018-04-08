@@ -10,4 +10,15 @@ message Test {
     string name = 3;
     int32 sub_message = 4;
   }
+  message Result {
+    string url = 1;
+    string title = 2;
+    repeated string snippets = 3;
+  }
+  enum Hoge {
+    reserved 2, 15, 9 to 11, 40 to max;
+    reserved "FOO", "BAR";
+    UNKNOWN = 0;
+    STARTED = 1;
+  }
 }
