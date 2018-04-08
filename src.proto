@@ -22,3 +22,6 @@ message Test {
     STARTED = 1;
   }
 }
+
+message Test2 {
+}

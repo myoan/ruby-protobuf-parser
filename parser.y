@@ -6,24 +6,26 @@ rule
   version: 'syntax' '=' DQWORD ';' { result = { :version => val[2].gsub("\"", "") } }
   statements: statement
             | statements statement { result = val[0].merge(val[1]) }
-  statement: import         { result = val[0].merge(val[1] || {} ) }
-           | package_syntax { result = val[0].merge(val[1] || {} ) }
-           | message        { result = val[0].merge(val[1] || {} ) }
+  statement: import
+           | package_syntax
+           | message { result = { message: val[0] } }
   import: 'import' DQWORD ';' { result = {import: []}; result[:import] << val[1].gsub("\"", "") }
   package_syntax: 'package' package ';' { result = {}; result[:package] = val[1] }
   package: WORD
          | package '.' WORD { result = val.join }
-  message: 'message' WORD '{' defines '}' { result = {}; result[val[1].downcase.to_sym] = val[3] }
-  defines: define
+  message: 'message' WORD '{' defines '}' { result = { name: val[1], value: val[3] } }
+  defines:
+         | define
          | defines define { result = val.flatten }
-  define: oneof
-        | enum
-        | message
+  define: oneof { result = { oneof: val[0] } }
+        | enum { result = { enum: val[0] } }
+        | message { result = { message: val[0] } }
         | type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] , repeated: false} }
         | 'repeated' type WORD '=' index ';' { result = { id: val[4], type: val[1], key: val[2], repeated: true } }
-  oneof:  'oneof' WORD '{' defines '}' { result = { val[1].downcase.to_sym => val[3] } }
-  enum: 'enum' WORD '{' enum_defines '}' { result = { val[1].downcase.to_sym => val[3].flatten } }
-  enum_defines: enum_defined
+  oneof: 'oneof' WORD '{' defines '}' { result = { name: val[1], value: val[3] } }
+  enum: 'enum' WORD '{' enum_defines '}' { result = { name: val[1], value: val[3].flatten } }
+  enum_defines:
+              | enum_defined
               | enum_defines enum_defined { result = val }
   enum_defined: WORD '=' index ';' { result = { id: val[2], key: val[0] } }
               | 'reserved' list ';' { result = { reserved: val[1..-2].flatten } }
