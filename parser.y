@@ -2,39 +2,39 @@ class ProtobufParser
 token INTEGER WORD DQWORD
 start top_stmt
 rule
-  top_stmt: version statements { result = val }
-  version: 'syntax' '=' DQWORD ';' { result = { :version => val[2].gsub("\"", "") } }
+  top_stmt: version statements               { }
+  version: 'syntax' '=' DQWORD ';'           { @statement.version = val[2].gsub("\"", "") }
   statements: statement
-            | statements statement { result = val[0].merge(val[1]) }
+            | statements statement           { }
   statement: import
            | package_syntax
-           | message { result = { message: val[0] } }
-  import: 'import' DQWORD ';' { result = {import: []}; result[:import] << val[1].gsub("\"", "") }
-  package_syntax: 'package' package ';' { result = {}; result[:package] = val[1] }
+           | message                         { @statement.append(:message, val[0]) }
+  import: 'import' DQWORD ';'                { @statement.append(:import, Protobuf::Import.new(val[1].gsub("\"", ""))) }
+  package_syntax: 'package' package ';'      { @statement.append(:package, val[1]) }
   package: WORD
-         | package '.' WORD { result = val.join }
-  message: 'message' WORD '{' defines '}' { result = { name: val[1], value: val[3] } }
+         | package '.' WORD                  { result = val.join }
+  message: 'message' WORD '{' defines '}'    { result = Protobuf::Message.new(val[1], val[3]) }
   defines:
          | define
-         | defines define { result = val.flatten }
-  define: oneof { result = { oneof: val[0] } }
-        | enum { result = { enum: val[0] } }
-        | message { result = { message: val[0] } }
-        | type WORD '=' index ';' { result = { id: val[3], type: val[0], key: val[1] , repeated: false} }
-        | 'repeated' type WORD '=' index ';' { result = { id: val[4], type: val[1], key: val[2], repeated: true } }
-  oneof: 'oneof' WORD '{' defines '}' { result = { name: val[1], value: val[3] } }
-  enum: 'enum' WORD '{' enum_defines '}' { result = { name: val[1], value: val[3].flatten } }
+         | defines define                    { result = val.flatten }
+  define: oneof                              { result = val[0] }
+        | enum                               { result = val[0] }
+        | message                            { result = val[0] }
+        | type WORD '=' index ';'            { result = Protobuf::Message::Field.new(val[0], val[1], val[3], false) }
+        | 'repeated' type WORD '=' index ';' { result = Protobuf::Message::Field.new(val[1], val[2], val[4], true) }
+  oneof: 'oneof' WORD '{' defines '}'        { result = Protobuf::OneOf.new(val[1], val[3]) }
+  enum: 'enum' WORD '{' enum_defines '}'     { result = Protobuf::Enum.new(val[1], val[3].flatten) }
   enum_defines:
               | enum_defined
-              | enum_defines enum_defined { result = val }
-  enum_defined: WORD '=' index ';' { result = { id: val[2], key: val[0] } }
-              | 'reserved' list ';' { result = { reserved: val[1..-2].flatten } }
+              | enum_defines enum_defined    { result = val }
+  enum_defined: WORD '=' index ';'           { result = Protobuf::Enum::Field.new(val[0], val[2], false) }
+              | 'reserved' list ';'          { result = val[1..-2].flatten }
   list: element
-      | list ',' element { result = ([val[0]] + [val[2]]).flatten }
-  element: INTEGER              { result = { from: val[0].to_i, to: val[0].to_i } }
-         | DQWORD               { result = { from: val[0], to: val[0] } }
-         | INTEGER 'to' INTEGER { result = { from: val[0].to_i, to: val[2].to_i } }
-         | INTEGER 'to' WORD    { result = { from: val[0].to_i, to: val[2] } }
+      | list ',' element                     { result = ([val[0]] + [val[2]]).flatten }
+  element: INTEGER                           { result = Protobuf::Enum::Field.new("", val[0].to_i, true) }
+         | DQWORD                            { result = Protobuf::Enum::Field.new(val[0].gsub("\"", ""), 0, true) }
+         | INTEGER 'to' INTEGER              { result = Protobuf::Enum::RangeField.new(val[0].to_i, val[2].to_i) }
+         | INTEGER 'to' 'max'                { result = Protobuf::Enum::RangeField.new(val[0].to_i, nil, true, true) }
   type: 'bool'
       | 'bytes'
       | 'enum'
@@ -58,15 +58,15 @@ end
 ---- header
 
 require 'strscan'
-require 'json'
+require './statement'
 
 ---- inner
 
   def parse(str)
     @yydebug = false
-    # @yydebug = true
     s = StringScanner.new(str)
     @q = []
+    @statement = Protobuf::Statement.new
     until                    s.eos?
       s.scan(/\s+/)                 ? (nil) :
       s.scan(/message/)             ? (@q << [s.matched, s.matched]) :
@@ -82,6 +82,7 @@ require 'json'
       s.scan(/int32/)               ? (@q << [s.matched, s.matched]) :
       s.scan(/int64/)               ? (@q << [s.matched, s.matched]) :
       s.scan(/oneof/)               ? (@q << [s.matched, s.matched]) :
+      s.scan(/max/)                 ? (@q << [s.matched, s.matched]) :
       s.scan(/package/)             ? (@q << [s.matched, s.matched]) :
       s.scan(/string/)              ? (@q << [s.matched, s.matched]) :
       s.scan(/sfixed32/)            ? (@q << [s.matched, s.matched]) :
@@ -100,6 +101,7 @@ require 'json'
                                       (raise "scanner error (#{s.matched})")
     end
     do_parse
+    @statement
   end
 
   def next_token
@@ -111,5 +113,5 @@ require 'json'
 parser = ProtobufParser.new
 if ARGV.length == 1
   src = File.open(ARGV[0]).read
-  puts parser.parse(src).to_json
+  pp parser.parse(src).to_h
 end

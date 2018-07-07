@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "hoge.proto";
+import "foo.bar";
 package Hoge.fuga;
 
 message Test {
@@ -21,7 +22,4 @@ message Test {
     UNKNOWN = 0;
     STARTED = 1;
   }
-}
-
-message Test2 {
 }
